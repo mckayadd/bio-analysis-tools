@@ -21,4 +21,4 @@ if blast_record.alignments:
     for i, alignment in enumerate(blast_record.alignments[:3], start=1):
         print(f"{i}. {alignment.title}")
 else:
-    print("No significant matches found.")
+    print("No significant matches found!")
