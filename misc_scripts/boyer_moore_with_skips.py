@@ -95,59 +95,58 @@ def boyer_moore_search(text: str, pattern: str):
     n = len(text)
     m = len(pattern)
     if m == 0:
-        return [], 0, 0
+        return [], 0, 0, 0
 
-    # Preprocessing
-    last = build_bad_char_table(pattern)           # bad character table
-    shift, border_pos = build_good_suffix_table(pattern)  # good suffix
+    last = build_bad_char_table(pattern)
+    shift, border_pos = build_good_suffix_table(pattern)
 
     positions = []
-    bc_skips = 0  # total skipped alignments (bad character)
-    gs_skips = 0  # total skipped alignments (good suffix)
+    visited_alignments = set()   # which i values we actually check
 
-    i = 0  # current alignment: pattern[0] aligned with text[i]
+    bc_skips = 0    # alignments skipped where bad character ruled
+    gs_skips = 0    # alignments skipped where good suffix ruled
+
+    total_positions = n - m + 1  # total possible alignments
+    i = 0
+
     while i <= n - m:
-        j = m - 1  # start comparing from the right end of pattern
+        visited_alignments.add(i)
 
-        # Move left as long as characters match
+        j = m - 1
         while j >= 0 and pattern[j] == text[i + j]:
             j -= 1
 
         if j < 0:
-            # Full match found at position i
+            # full match
             positions.append(i)
-
-            # For a full match, good suffix rule suggests shift[0]
-            gs_shift = shift[0]
-            # Bad character rule is not really used here; define as 1
-            bc_shift = 1
-
-            # Convert shifts to "skips" (shift S means S-1 skipped alignments)
-            bc_skips += max(bc_shift - 1, 0)
-            gs_skips += max(gs_shift - 1, 0)
-
-            # Move pattern by the larger suggested shift
-            i += max(bc_shift, gs_shift)
+            chosen_shift = shift[0]  # good suffix shift after a match
+            # how many alignments are actually skipped (don't overshoot)
+            remaining = max(0, total_positions - (i + 1))
+            actual_skip = min(chosen_shift - 1, remaining)
+            gs_skips += actual_skip
+            i += chosen_shift
         else:
-            # Mismatch at pattern index j, text index i+j
             bad_char = text[i + j]
-
-            # ----- Bad character shift -----
-            last_pos = last.get(bad_char, -1)  # -1 if bad_char not in pattern
+            last_pos = last.get(bad_char, -1)
             bc_shift = max(1, j - last_pos)
-
-            # ----- Good suffix shift -----
-            # We use shift[j+1] because shift array is 1-based in theory
             gs_shift = shift[j + 1]
 
-            # Count potential "skips" for each rule
-            bc_skips += max(bc_shift - 1, 0)
-            gs_skips += max(gs_shift - 1, 0)
+            chosen_shift = max(bc_shift, gs_shift)
+            remaining = max(0, total_positions - (i + 1))
+            actual_skip = min(chosen_shift - 1, remaining)
 
-            # Actual shift applied is the max of the two rules
-            i += max(bc_shift, gs_shift)
+            if bc_shift > gs_shift:
+                bc_skips += actual_skip
+            elif gs_shift > bc_shift:
+                gs_skips += actual_skip
+            else:
+                # tie – you could attribute to either, or split
+                bc_skips += actual_skip
 
-    return positions, bc_skips, gs_skips
+            i += chosen_shift
+
+    total_skipped = total_positions - len(visited_alignments)
+    return positions, bc_skips, gs_skips, total_skipped
 
 
 # ---------- Command-line interface ----------
@@ -168,7 +167,7 @@ def main():
     T = args.text
     P = args.pattern
 
-    positions, bc_skips, gs_skips = boyer_moore_search(T, P)
+    positions, bc_skips, gs_skips, total_skipped = boyer_moore_search(T, P)
 
     if positions:
         print(f"Pattern found at positions (0-based): {positions}")
@@ -177,6 +176,7 @@ def main():
 
     print(f"Total bad character skips: {bc_skips}")
     print(f"Total good suffix skips: {gs_skips}")
+    print(f"Total skipped: {total_skipped}")
 
 
 if __name__ == "__main__":
